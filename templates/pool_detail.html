@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>{{ pool.title }}</h2>
+  <p><strong>{{ pool.origin }}</strong> → <strong>{{ pool.destination }}</strong></p>
+  <p>{{ pool.description }}</p>
+  <p>Seats: {{ pool.seats }}</p>
+  {% if current_user.is_authenticated %}
+    {% if is_owner %}
+      <p class="muted">You created this pool. You are already included and cannot request to join.</p>
+      <form method="post" action="{{ url_for('main.cancel_pool', pool_id=pool.id) }}" style="margin-top:12px;">
+        <button type="submit" class="btn secondary">Cancel Pool</button>
+      </form>
+    {% else %}
+      {% if is_rider %}
+        <p class="muted">You are participating in this pool.</p>
+        <form method="post" action="{{ url_for('main.leave_pool', pool_id=pool.id) }}" style="margin-top:12px;">
+          <button type="submit" class="btn secondary">Leave Pool</button>
+        </form>
+      {% else %}
+        <h3>Request to join</h3>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          <div class="form-group">
+            <label class="form-label">{{ form.message.label }}</label>
+            {{ form.message(rows=3, cols=80, placeholder='Optional message to the driver') }}
+          </div>
+          <div class="form-actions">
+            {{ form.submit(class_='btn') }}
+          </div>
+        </form>
+      {% endif %}
+    {% endif %}
+  {% else %}
+    <p><a href="{{ url_for('auth.login') }}">Log in</a> to request joining.</p>
+  {% endif %}
+{% endblock %}
