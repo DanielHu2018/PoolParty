@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, IntegerField, TextAreaField, DateTimeField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, IntegerField, TextAreaField, DateTimeField, ValidationError
 from wtforms.validators import DataRequired, Email, EqualTo, Length, NumberRange, Optional
+from .models import User
 
 
 class RegistrationForm(FlaskForm):
@@ -11,6 +12,16 @@ class RegistrationForm(FlaskForm):
     full_name = StringField('Full name', validators=[Optional(), Length(max=128)])
     phone = StringField('Phone', validators=[Optional(), Length(max=32)])
     submit = SubmitField('Register')
+
+    def validate_username(self, username):
+        # ensure username is unique
+        if User.query.filter_by(username=username.data).first():
+            raise ValidationError('That username is already taken. Please choose another.')
+
+    def validate_email(self, email):
+        # ensure email is unique
+        if User.query.filter_by(email=email.data).first():
+            raise ValidationError('An account with that email already exists.')
 
 
 class LoginForm(FlaskForm):
@@ -38,4 +49,7 @@ class JoinRequestForm(FlaskForm):
 class ProfileForm(FlaskForm):
     full_name = StringField('Full name', validators=[Optional(), Length(max=128)])
     phone = StringField('Phone', validators=[Optional(), Length(max=32)])
+    pickup_address = StringField('Pickup address', validators=[Optional(), Length(max=255)])
+    pickup_notes = TextAreaField("Pickup notes (landmarks, gate codes, where you'll wait)", validators=[Optional(), Length(max=500)])
+    appearance = StringField('Appearance (clothing, hair, etc)', validators=[Optional(), Length(max=255)])
     submit = SubmitField('Save')
