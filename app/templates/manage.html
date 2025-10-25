@@ -1,87 +1,129 @@
 {% extends 'base.html' %}
 {% block content %}
   <h2>Manage</h2>
+
   <h3>Your pools</h3>
-  {% if owned_pools %}
-    <ul>
-    {% for p in owned_pools %}
-      <li>
-        <strong>{{ p.title }}</strong> — <a href="{{ url_for('main.pool_detail', pool_id=p.id) }}">view</a>
-        <div style="margin-top:8px;">
-          <em>Riders:</em>
-          <ul>
-            {% for r in p.rides %}
-              <li>{{ r.passenger.username }} {% if r.status != 'cancelled' %} — {{ r.status }}{% else %} — <em>cancelled</em>{% endif %}
-                <form method="post" action="{{ url_for('main.remove_rider', pool_id=p.id, user_id=r.user_id) }}" style="display:inline;margin-left:8px;">
-                  <button type="submit" class="btn secondary">Remove</button>
+  {% if owner_pools_info %}
+    <div class="listings-grid">
+      {% for info in owner_pools_info %}
+        {% set p = info.pool %}
+        <div class="card">
+          <div class="card-body">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div>
+                <div class="card-title">{{ p.title }}</div>
+                <div class="card-route">{{ p.origin }} → {{ p.destination }} {% if p.depart_time %}• {{ p.depart_time.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
+                <div class="card-meta">
+                  <span class="pill">Seats: {{ p.seats }}</span>
+                  <a href="{{ url_for('main.pool_detail', pool_id=p.id) }}" class="muted">View</a>
+                </div>
+              </div>
+              <div>
+                <form method="post" action="{{ url_for('main.cancel_pool', pool_id=p.id) }}" style="display:inline">
+                  <button type="submit" class="btn secondary">Cancel Pool</button>
                 </form>
-              </li>
-            {% else %}
-              <li class="muted">No riders yet.</li>
-            {% endfor %}
-          </ul>
-          <form method="post" action="{{ url_for('main.add_rider', pool_id=p.id) }}" style="margin-top:6px;">
-            <input name="identifier" placeholder="username or email" class="search-input" style="width:220px;display:inline-block;"> 
-            <button type="submit" class="btn">Add rider</button>
-          </form>
+              </div>
+            </div>
+
+            <div style="margin-top:6px;">
+              <strong>Riders</strong>
+              <ul>
+                {% if info.riders %}
+                  {% for item in info.riders %}
+                    <li>{{ item.user.username }} {% if item.ride.status != 'cancelled' %} — {{ item.ride.status }}{% else %} — <em>cancelled</em>{% endif %}
+                      <form method="post" action="{{ url_for('main.remove_rider', pool_id=p.id, user_id=item.user.id) }}" style="display:inline;margin-left:8px;">
+                        <button type="submit" class="btn secondary">Remove</button>
+                      </form>
+                    </li>
+                  {% endfor %}
+                {% else %}
+                  <li class="muted">No riders yet.</li>
+                {% endif %}
+              </ul>
+            </div>
+
+            <div style="margin-top:8px;">
+              <strong>Pending requests</strong>
+              <ul>
+                {% if info.requests %}
+                  {% for jr in info.requests %}
+                    <li>
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                        <div>
+                          <div><strong>{{ jr.requester.username }}</strong> <span class="muted">({{ jr.requester.email }})</span></div>
+                          {% if jr.message %}
+                            <div class="muted">"{{ jr.message }}"</div>
+                          {% endif %}
+                        </div>
+                        <div style="white-space:nowrap;">
+                          <a href="{{ url_for('main.handle_request', req_id=jr.id, action='accept') }}" class="btn">Accept</a>
+                          <a href="{{ url_for('main.handle_request', req_id=jr.id, action='reject') }}" class="btn secondary">Reject</a>
+                        </div>
+                      </div>
+                    </li>
+                  {% endfor %}
+                {% else %}
+                  <li class="muted">No pending requests.</li>
+                {% endif %}
+              </ul>
+            </div>
+          </div>
         </div>
-      </li>
-    {% endfor %}
-    </ul>
+      {% endfor %}
+    </div>
   {% else %}
     <p>You do not own any pools.</p>
   {% endif %}
-
-  <h3>Requests for your pools</h3>
-  {% if owner_requests %}
-    {% set current_pool = None %}
-    <ul>
-    {% for jr in owner_requests %}
-      {% if not loop.first and jr.pool.id != current_pool %}
-        {# just continue grouping #}
-      {% endif %}
-      {% set current_pool = jr.pool.id %}
-      <li>
-        <strong>{{ jr.pool.title }}</strong> — {{ jr.requester.username }}: {{ jr.status }}
-        {% if jr.status == 'pending' %}
-          — <a href="{{ url_for('main.handle_request', req_id=jr.id, action='accept') }}">accept</a> | <a href="{{ url_for('main.handle_request', req_id=jr.id, action='reject') }}">reject</a>
-        {% else %}
-          {% if jr.status == 'accepted' %}
-            — <em>accepted</em>
-          {% else %}
-            — <em>{{ jr.status }}</em>
-          {% endif %}
-        {% endif %}
-      </li>
-    {% endfor %}
-    </ul>
-  {% else %}
-    <p>No incoming requests for your pools.</p>
-  {% endif %}
+  {# Requests are shown inside each pool card (Pending requests) - removed duplicate section #}
 
   <h3>Pools you're riding in</h3>
   {% if my_rides %}
-    <ul>
-    {% for ride in my_rides %}
-      <li>
-        <strong>{{ ride.pool.title }}</strong> — {{ ride.pool.origin }} → {{ ride.pool.destination }} — <a href="{{ url_for('main.pool_detail', pool_id=ride.pool.id) }}">view</a>
-        <form method="post" action="{{ url_for('main.leave_pool', pool_id=ride.pool.id) }}" style="display:inline;margin-left:8px;">
-          <button type="submit" class="btn secondary">Leave</button>
-        </form>
-      </li>
-    {% endfor %}
-    </ul>
+    <div class="listings-grid">
+      {% for ride in my_rides %}
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">{{ ride.pool.title }}</div>
+            <div class="card-route">{{ ride.pool.origin }} → {{ ride.pool.destination }}</div>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+              <a href="{{ url_for('main.pool_detail', pool_id=ride.pool.id) }}" class="btn">View</a>
+              <form method="post" action="{{ url_for('main.leave_pool', pool_id=ride.pool.id) }}" style="display:inline">
+                <button type="submit" class="btn secondary">Leave</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
   {% else %}
     <p>You are not riding in any pools.</p>
   {% endif %}
 
   <h3>Your join requests</h3>
   {% if my_requests %}
-    <ul>
-    {% for r in my_requests %}
-      <li>{{ r.pool.title }} — {{ r.status }}</li>
-    {% endfor %}
-    </ul>
+    <div class="listings-grid">
+      {% for r in my_requests %}
+        <div class="card">
+          <div class="card-body">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div class="card-title">{{ r.pool.title }}</div>
+                <div class="card-route">{{ r.pool.origin }} → {{ r.pool.destination }}</div>
+                <div class="muted">requested on {{ r.created_at.strftime('%Y-%m-%d') }}</div>
+                {% if r.message %}
+                  <div style="margin-top:6px;" class="muted">"{{ r.message }}"</div>
+                {% endif %}
+              </div>
+              <div style="white-space:nowrap;display:flex;gap:8px;align-items:center;">
+                <a href="{{ url_for('main.pool_detail', pool_id=r.pool.id) }}" class="btn">View</a>
+                <form method="post" action="{{ url_for('main.cancel_request', req_id=r.id) }}" style="display:inline">
+                  <button type="submit" class="btn secondary">Cancel</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
   {% else %}
     <p>No requests.</p>
   {% endif %}

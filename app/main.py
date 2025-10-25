@@ -68,6 +68,19 @@ def pool_detail(pool_id):
         if pool.owner_id == current_user.id:
             flash('You are the owner of this pool and cannot request to join it.', 'warning')
             return redirect(url_for('main.pool_detail', pool_id=pool.id))
+        # Prevent duplicate pending requests or if user already has a ride on this pool
+        existing_jr = JoinRequest.query.filter_by(user_id=current_user.id, pool_id=pool.id, status='pending').first()
+        if existing_jr:
+            flash('You already have a pending request for this pool.', 'info')
+            return redirect(url_for('main.pool_detail', pool_id=pool.id))
+        existing_ride_for_user = Ride.query.filter_by(pool_id=pool.id, user_id=current_user.id).first()
+        if existing_ride_for_user:
+            flash('You are already a rider on this pool.', 'info')
+            return redirect(url_for('main.pool_detail', pool_id=pool.id))
+        # Prevent joining a full pool
+        if hasattr(pool, 'seats') and (pool.seats is not None) and pool.seats <= 0:
+            flash('This pool has no seats available.', 'warning')
+            return redirect(url_for('main.pool_detail', pool_id=pool.id))
         jr = JoinRequest(user_id=current_user.id, pool_id=pool.id, message=form.message.data)
         db.session.add(jr)
         db.session.commit()
@@ -75,7 +88,12 @@ def pool_detail(pool_id):
         return redirect(url_for('main.pool_detail', pool_id=pool.id))
     is_owner = current_user.is_authenticated and (pool.owner_id == current_user.id)
     is_rider = user_ride is not None
-    return render_template('pool_detail.html', pool=pool, form=form, is_owner=is_owner, is_rider=is_rider)
+    seats_available = None
+    is_full = False
+    if hasattr(pool, 'seats'):
+        seats_available = pool.seats
+        is_full = (seats_available is not None) and (seats_available <= 0)
+    return render_template('pool_detail.html', pool=pool, form=form, is_owner=is_owner, is_rider=is_rider, seats_available=seats_available, is_full=is_full)
 
 
 @main_bp.route('/manage')
@@ -104,7 +122,8 @@ def manage():
 
     # Show the user's join requests, but hide those where the pool is cancelled or where
     # the user already has a ride on that pool which is cancelled.
-    raw_requests = JoinRequest.query.filter_by(user_id=current_user.id).all()
+    # Show the user's join requests (only pending ones), but hide those where the pool is cancelled
+    raw_requests = JoinRequest.query.filter_by(user_id=current_user.id, status='pending').all()
     my_requests = []
     for jr in raw_requests:
         pool = jr.pool
@@ -117,8 +136,8 @@ def manage():
             continue
         my_requests.append(jr)
 
-    # Collect join requests for pools owned by the current user (so owners can review them)
-    owner_raw_requests = JoinRequest.query.join(Pool).filter(Pool.owner_id == current_user.id).all()
+    # Collect pending join requests for pools owned by the current user (owners review only pending requests)
+    owner_raw_requests = JoinRequest.query.join(Pool).filter(Pool.owner_id == current_user.id, JoinRequest.status == 'pending').all()
     owner_requests = []
     for jr in owner_raw_requests:
         pool = jr.pool
@@ -152,6 +171,11 @@ def cancel_pool(pool_id):
     if pool.owner_id != current_user.id:
         flash('Unauthorized', 'danger')
         return redirect(url_for('main.pool_detail', pool_id=pool.id))
+    # Prevent cancelling a pool that already has riders
+    existing_ride = Ride.query.filter_by(pool_id=pool.id).first()
+    if existing_ride:
+        flash('Cannot cancel a pool with riders. Remove riders first.', 'warning')
+        return redirect(url_for('main.manage'))
     try:
         pool.cancelled = True
         db.session.commit()
@@ -176,6 +200,13 @@ def leave_pool(pool_id):
         return redirect(url_for('main.pool_detail', pool_id=pool.id))
     # remove the ride record (user leaves pool)
     db.session.delete(ride)
+    # restore a seat when a rider leaves (if seats column exists)
+    if hasattr(pool, 'seats') and (pool.seats is not None):
+        try:
+            pool.seats = pool.seats + 1
+        except Exception:
+            # fallback: ignore if seats can't be updated
+            pass
     db.session.commit()
     flash('You have left the pool.', 'info')
     return redirect(url_for('main.listings'))
@@ -204,6 +235,12 @@ def add_rider(pool_id):
     if existing:
         flash('That user is already a rider on this pool.', 'info')
         return redirect(url_for('main.manage'))
+    # ensure seats available before adding
+    if hasattr(pool, 'seats') and (pool.seats is not None):
+        if pool.seats <= 0:
+            flash('No seats available to add this rider.', 'warning')
+            return redirect(url_for('main.manage'))
+        pool.seats = pool.seats - 1
     ride = Ride(pool_id=pool.id, user_id=user.id, status='scheduled')
     db.session.add(ride)
     db.session.commit()
@@ -227,6 +264,12 @@ def remove_rider(pool_id, user_id):
         flash('Rider not found.', 'warning')
         return redirect(url_for('main.manage'))
     db.session.delete(ride)
+    # restore a seat when a rider is removed by owner
+    if hasattr(pool, 'seats') and (pool.seats is not None):
+        try:
+            pool.seats = pool.seats + 1
+        except Exception:
+            pass
     db.session.commit()
     flash('Rider removed from the pool.', 'info')
     return redirect(url_for('main.manage'))
@@ -242,6 +285,12 @@ def handle_request(req_id, action):
         flash('Unauthorized', 'danger')
         return redirect(url_for('main.manage'))
     if action == 'accept':
+        # ensure there are seats available
+        if hasattr(pool, 'seats') and (pool.seats is not None):
+            if pool.seats <= 0:
+                flash('No seats available to accept this request.', 'warning')
+                return redirect(url_for('main.manage'))
+            pool.seats = pool.seats - 1
         jr.status = 'accepted'
         # create a Ride as basic assignment
         ride = Ride(pool_id=pool.id, user_id=jr.user_id, status='scheduled')
@@ -250,4 +299,22 @@ def handle_request(req_id, action):
         jr.status = 'rejected'
     db.session.commit()
     flash('Request updated', 'info')
+    return redirect(url_for('main.manage'))
+
+
+@main_bp.route('/request/<int:req_id>/cancel', methods=['POST'])
+@login_required
+def cancel_request(req_id):
+    """Allow a requester to cancel/withdraw their pending join request."""
+    jr = JoinRequest.query.get_or_404(req_id)
+    # only the requester can cancel their own request
+    if jr.user_id != current_user.id:
+        flash('Unauthorized', 'danger')
+        return redirect(url_for('main.manage'))
+    if jr.status != 'pending':
+        flash('Request cannot be cancelled (already processed).', 'info')
+        return redirect(url_for('main.manage'))
+    jr.status = 'withdrawn'
+    db.session.commit()
+    flash('Join request cancelled.', 'info')
     return redirect(url_for('main.manage'))

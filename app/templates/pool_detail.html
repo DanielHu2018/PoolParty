@@ -1,36 +1,75 @@
 {% extends 'base.html' %}
 {% block content %}
-  <h2>{{ pool.title }}</h2>
-  <p><strong>{{ pool.origin }}</strong> → <strong>{{ pool.destination }}</strong></p>
-  <p>{{ pool.description }}</p>
-  <p>Seats: {{ pool.seats }}</p>
-  {% if current_user.is_authenticated %}
-    {% if is_owner %}
-      <p class="muted">You created this pool. You are already included and cannot request to join.</p>
-      <form method="post" action="{{ url_for('main.cancel_pool', pool_id=pool.id) }}" style="margin-top:12px;">
-        <button type="submit" class="btn secondary">Cancel Pool</button>
-      </form>
-    {% else %}
-      {% if is_rider %}
-        <p class="muted">You are participating in this pool.</p>
-        <form method="post" action="{{ url_for('main.leave_pool', pool_id=pool.id) }}" style="margin-top:12px;">
-          <button type="submit" class="btn secondary">Leave Pool</button>
-        </form>
-      {% else %}
-        <h3>Request to join</h3>
-        <form method="post">
-          {{ form.hidden_tag() }}
-          <div class="form-group">
-            <label class="form-label">{{ form.message.label }}</label>
-            {{ form.message(rows=3, cols=80, placeholder='Optional message to the driver') }}
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:1;min-width:320px;">
+          <div class="card-title">{{ pool.title }}</div>
+          <div class="card-route">{{ pool.origin }} → {{ pool.destination }} {% if pool.depart_time %}• {{ pool.depart_time.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
+          <div class="card-desc" style="margin-top:10px;">{{ pool.description or "No description provided." }}</div>
+
+          <div style="margin-top:14px;">
+            <strong>Riders</strong>
+            <ul>
+              {% if pool.rides.count() > 0 %}
+                {% for r in pool.rides %}
+                  <li>{{ r.passenger.username }} {% if r.status != 'cancelled' %} — {{ r.status }}{% else %} — <em>cancelled</em>{% endif %}</li>
+                {% endfor %}
+              {% else %}
+                <li class="muted">No riders yet.</li>
+              {% endif %}
+            </ul>
           </div>
-          <div class="form-actions">
-            {{ form.submit(class_='btn') }}
+        </div>
+
+        <aside style="width:300px;">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <div class="pill">Seats: {{ seats_available if seats_available is not none else pool.seats }}</div>
+            </div>
+            <div>
+              <div class="muted">Driver</div>
+              <div><strong>{{ pool.owner.username }}</strong><br><span class="muted">{{ pool.owner.email }}</span></div>
+            </div>
+
+            <div>
+              {% if not current_user.is_authenticated %}
+                <a href="{{ url_for('auth.login') }}" class="btn">Log in to request</a>
+              {% else %}
+                {% if is_owner %}
+                  <div class="muted">You created this pool. You are included by default.</div>
+                  <form method="post" action="{{ url_for('main.cancel_pool', pool_id=pool.id) }}">
+                    <button type="submit" class="btn secondary">Cancel Pool</button>
+                  </form>
+                {% else %}
+                  {% if is_rider %}
+                    <div class="muted">You are participating in this pool.</div>
+                    <form method="post" action="{{ url_for('main.leave_pool', pool_id=pool.id) }}">
+                      <button type="submit" class="btn secondary">Leave Pool</button>
+                    </form>
+                  {% else %}
+                    {% if is_full %}
+                      <div class="muted">This pool is full.</div>
+                    {% else %}
+                      <div style="margin-top:6px;">
+                        <form method="post">
+                          {{ form.hidden_tag() }}
+                          <div class="form-group">
+                            {{ form.message(rows=3, placeholder='Optional message to the driver') }}
+                          </div>
+                          <div class="form-actions">
+                            {{ form.submit(class="btn") }}
+                          </div>
+                        </form>
+                      </div>
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            </div>
           </div>
-        </form>
-      {% endif %}
-    {% endif %}
-  {% else %}
-    <p><a href="{{ url_for('auth.login') }}">Log in</a> to request joining.</p>
-  {% endif %}
+        </aside>
+      </div>
+    </div>
+  </div>
 {% endblock %}
