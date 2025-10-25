@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="container">
+    <div class="page-title">
+      <h2>Ride Listings</h2>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <form class="search-form" method="get" action="{{ url_for('main.listings') }}">
+          <input class="search-input" name="q" placeholder="Search by destination (e.g. 'Airport')" value="{{ q or '' }}">
+          <button class="search-btn" type="submit">Search</button>
+        </form>
+        <div class="muted">Showing {{ pools|length }} results</div>
+      </div>
+    </div>
+
+    {% if pools %}
+      <div class="listings-grid">
+        {% for p in pools %}
+          <article class="card">
+            <div class="card-body">
+              <div class="card-title">{{ p.title }}</div>
+              <div class="card-route">{{ p.origin }} &rarr; {{ p.destination }}</div>
+
+              <div class="card-meta">
+                {% if p.depart_time %}
+                  <div class="pill">Depart: {{ p.depart_time.strftime('%b %d, %Y %I:%M %p') }}</div>
+                {% else %}
+                  <div class="pill">Depart: TBD</div>
+                {% endif %}
+                <div class="pill">Seats: {{ p.seats }}</div>
+                <div class="pill">Posted by: {{ (p.owner.full_name or p.owner.username) if p.owner else 'Unknown' }}</div>
+              </div>
+
+              {% if p.description %}
+                <div class="card-desc">{{ p.description }}</div>
+              {% endif %}
+            </div>
+            <div class="card-footer">
+              <small class="muted">Posted {{ p.created_at.strftime('%b %d') }}</small>
+              <a class="btn" href="{{ url_for('main.pool_detail', pool_id=p.id) }}">View</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>No current listings.</p>
+    {% endif %}
+  </div>
+{% endblock %}
