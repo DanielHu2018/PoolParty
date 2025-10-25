@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="container">
+    <div class="form-card">
+      <h2>Profile</h2>
+      <form method="post">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+          <label class="form-label">{{ form.full_name.label }}</label>
+          {{ form.full_name(placeholder='Full name') }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ form.phone.label }}</label>
+          {{ form.phone(placeholder='Phone number') }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ form.pickup_address.label }}</label>
+          {{ form.pickup_address(placeholder='Address or cross-street for pickups') }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ form.pickup_notes.label }}</label>
+          {{ form.pickup_notes(placeholder='Nearby landmark, gate code, where you will wait') }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ form.appearance.label }}</label>
+          {{ form.appearance(placeholder='What you will be wearing or other identifying details') }}
+        </div>
+        <div class="form-actions">
+          {{ form.submit(class_='btn') }}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
