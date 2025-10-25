@@ -1,7 +1,13 @@
-<!-- Placeholder template: listings.html removed -->
-<!doctype html>
-<html>
-  <body>
-    <p>Placeholder for templates/listings.html</p>
-  </body>
-</html>
+{% extends 'base.html' %}
+{% block content %}
+  <h2>All Listings</h2>
+  {% if pools %}
+    <ul>
+    {% for p in pools %}
+      <li><a href="{{ url_for('main.pool_detail', pool_id=p.id) }}">{{ p.title }}</a> — {{ p.origin }} → {{ p.destination }} {% if p.depart_time %} at {{ p.depart_time }}{% endif %}</li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>No current listings.</p>
+  {% endif %}
+{% endblock %}
