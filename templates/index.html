@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Recent pools</h2>
+  {% if pools %}
+    <ul>
+    {% for p in pools %}
+      <li><a href="{{ url_for('main.pool_detail', pool_id=p.id) }}">{{ p.title }}</a> — {{ p.origin }} → {{ p.destination }}</li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>No pools yet. <a href="{{ url_for('main.create_pool') }}">Create one</a>.</p>
+  {% endif %}
+{% endblock %}

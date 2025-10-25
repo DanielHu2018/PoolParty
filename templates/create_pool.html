@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Create Pool</h2>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <p>{{ form.title.label }}<br>{{ form.title(size=80) }}</p>
+    <p>{{ form.origin.label }}<br>{{ form.origin(size=60) }}</p>
+    <p>{{ form.destination.label }}<br>{{ form.destination(size=60) }}</p>
+    <p>{{ form.depart_time.label }}<br>{{ form.depart_time() }}</p>
+    <p>{{ form.seats.label }}<br>{{ form.seats() }}</p>
+    <p>{{ form.description.label }}<br>{{ form.description(rows=4, cols=80) }}</p>
+    <p>{{ form.submit() }}</p>
+  </form>
+{% endblock %}
