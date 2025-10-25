@@ -1,5 +1,3 @@
-"""
-Main blueprint placeholder.
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from .forms import PoolForm, JoinRequestForm
@@ -9,6 +7,7 @@ from . import db
 from datetime import datetime
 from sqlalchemy import or_
 
+"""
 Primary application routes were removed to leave a structural scaffold. Add
 views and route handlers here when implementing the application logic.
 """
