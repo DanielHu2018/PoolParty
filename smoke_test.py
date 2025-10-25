@@ -1,9 +1,23 @@
-"""
-Smoke test placeholder.
+from werkzeug.security import generate_password_hash
+from app import create_app, db
+from app.models import User, Pool
 
-This file previously contained a small script used to exercise the app.
-Per the user's request to keep only project structure (no application code),
-the implementation has been removed and replaced with this placeholder.
-"""
+app = create_app()
 
-__all__ = []
+with app.app_context():
+    # reset DB for smoke test
+    try:
+        db.drop_all()
+    except Exception:
+        pass
+    db.create_all()
+
+    user = User(username='smokeuser', email='smoke@example.com', password=generate_password_hash('password'))
+    db.session.add(user)
+    db.session.commit()
+
+    pool = Pool(title='Morning Commute', origin='Home', destination='Office', seats=3, owner=user)
+    db.session.add(pool)
+    db.session.commit()
+
+    print('SMOKE_TEST_OK', user.id, pool.id)

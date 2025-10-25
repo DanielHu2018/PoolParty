@@ -10,6 +10,10 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(128), nullable=False)
     full_name = db.Column(db.String(128))
     phone = db.Column(db.String(32))
+    # Fields to help drivers locate and identify the user for pickup
+    pickup_address = db.Column(db.String(255))
+    pickup_notes = db.Column(db.Text)
+    appearance = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     pools = db.relationship('Pool', backref='owner', lazy='dynamic')
@@ -27,6 +31,7 @@ class Pool(db.Model):
     depart_time = db.Column(db.DateTime, nullable=True)
     seats = db.Column(db.Integer, default=1)
     description = db.Column(db.Text)
+    cancelled = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'))
