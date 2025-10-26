@@ -53,8 +53,11 @@
                 <div class="card-desc">{{ p.description }}</div>
               {% endif %}
             </div>
-            <div class="card-footer">
-          <small class="muted">Posted {{ p.created_at.strftime('%b %d') }}</small>
+            <div class="card-footer" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <small class="muted">Posted {{ p.created_at.strftime('%b %d') }}</small>
+              <div>
+                <a class="btn" href="{{ url_for('main.pool_detail', pool_id=p.id) }}">View / Request</a>
+              </div>
             </div>
           </article>
         {% endfor %}
