@@ -2,10 +2,11 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from .forms import PoolForm, JoinRequestForm
 from .models import Pool, JoinRequest, Ride, User
+from .geo import geocode_mapbox, haversine_miles, route_any, estimate_duration_seconds_from_meters
 from sqlalchemy.exc import OperationalError
 from . import db
-from datetime import datetime
-from sqlalchemy import or_
+from datetime import timedelta
+# (no direct 'or_' usage in this module)
 
 """
 Primary application routes were removed to leave a structural scaffold. Add
@@ -34,6 +35,89 @@ def listings():
             pools = Pool.query.filter(Pool.destination.ilike(term)).order_by(Pool.depart_time.asc().nullsfirst()).all()
         else:
             pools = Pool.query.order_by(Pool.depart_time.asc().nullsfirst()).all()
+
+    # Attempt to compute ETA (duration) for pools that have origin/destination coordinates.
+    # This will call Mapbox Directions for each pool with coords when MAPBOX_TOKEN is set.
+    # Pre-geocode the current user's pickup address once (if available)
+    user_pickup_lat = None
+    user_pickup_lng = None
+    try:
+        if current_user.is_authenticated and getattr(current_user, 'pickup_address', None):
+            upl, uplng = geocode_mapbox(current_user.pickup_address)
+            if upl and uplng:
+                user_pickup_lat = upl
+                user_pickup_lng = uplng
+    except Exception:
+        user_pickup_lat = None
+        user_pickup_lng = None
+
+    for p in pools:
+        # default: no eta
+        p.eta_seconds = None
+        p.eta_human = None
+        p.eta_arrival = None
+        # pickup-specific timings for the current user
+        p.pickup_travel_seconds = None
+        p.pickup_travel_human = None
+        p.pickup_leave_by = None
+        try:
+            # ETA for origin -> destination using road routing when available
+            if hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng and p.dest_lat and p.dest_lng:
+                route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
+                if route and route.get('duration_seconds'):
+                    dur = int(round(route.get('duration_seconds')))
+                else:
+                    # fallback: estimate from haversine distance between origin and destination
+                    miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                    if miles is not None:
+                        meters = miles * 1609.344
+                        dur = estimate_duration_seconds_from_meters(meters)
+                    else:
+                        dur = None
+
+                if dur:
+                    p.eta_seconds = dur
+                    hours, rem = divmod(dur, 3600)
+                    mins = rem // 60
+                    p.eta_human = f"{hours}h {mins}m" if hours else f"{mins}m"
+                    if p.depart_time:
+                        try:
+                            p.eta_arrival = p.depart_time + timedelta(seconds=dur)
+                        except Exception:
+                            p.eta_arrival = None
+
+            # If we have a logged-in user's pickup coords and the pool has origin coords,
+            # compute travel time from pickup -> origin so we can show leave-by time.
+            if user_pickup_lat and user_pickup_lng and hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng:
+                proute = route_any([(user_pickup_lng, user_pickup_lat), (p.origin_lng, p.origin_lat)])
+                if proute and proute.get('duration_seconds'):
+                    pdur = int(round(proute.get('duration_seconds')))
+                else:
+                    miles = haversine_miles(user_pickup_lat, user_pickup_lng, p.origin_lat, p.origin_lng)
+                    if miles is not None:
+                        meters = miles * 1609.344
+                        pdur = estimate_duration_seconds_from_meters(meters)
+                    else:
+                        pdur = None
+
+                if pdur:
+                    p.pickup_travel_seconds = pdur
+                    phours, prem = divmod(pdur, 3600)
+                    pmins = prem // 60
+                    p.pickup_travel_human = f"{phours}h {pmins}m" if phours else f"{pmins}m"
+                    if p.depart_time:
+                        try:
+                            p.pickup_leave_by = p.depart_time - timedelta(seconds=pdur)
+                        except Exception:
+                            p.pickup_leave_by = None
+        except Exception:
+            # any error in calling external API should not break listings
+            p.eta_seconds = None
+            p.eta_human = None
+            p.eta_arrival = None
+            p.pickup_travel_seconds = None
+            p.pickup_travel_human = None
+            p.pickup_leave_by = None
     return render_template('listings.html', pools=pools, q=q)
 
 
@@ -45,6 +129,21 @@ def create_pool():
         pool = Pool(title=form.title.data, origin=form.origin.data, destination=form.destination.data,
                     depart_time=form.depart_time.data, seats=form.seats.data, description=form.description.data,
                     owner=current_user)
+        # attempt to geocode origin and destination (no-op if MAPBOX_TOKEN missing)
+        try:
+            lat, lng = geocode_mapbox(form.origin.data)
+            if lat and lng:
+                pool.origin_lat = lat
+                pool.origin_lng = lng
+        except Exception:
+            pass
+        try:
+            dlat, dlng = geocode_mapbox(form.destination.data)
+            if dlat and dlng:
+                pool.dest_lat = dlat
+                pool.dest_lng = dlng
+        except Exception:
+            pass
         db.session.add(pool)
         db.session.commit()
         flash('Pool created.', 'success')
@@ -160,6 +259,57 @@ def manage():
         reqs = [jr for jr in owner_requests if jr.pool_id == p.id]
 
         owner_pools_info.append({'pool': p, 'riders': riders, 'requests': reqs})
+
+    # Compute added time to route for each pending request (for owners to review)
+    # Attach jr.added_seconds and jr.added_human when computable.
+    for jr in owner_requests:
+        try:
+            jr.added_seconds = None
+            jr.added_human = None
+            pool = jr.pool
+            # Need pool coords and requester pickup address
+            if (hasattr(pool, 'origin_lat') and pool.origin_lat and pool.origin_lng and pool.dest_lat and pool.dest_lng) and getattr(jr.requester, 'pickup_address', None):
+                # Geocode requester pickup address (use geocode_any which prefers ORS/Mapbox/Nominatim)
+                from .geo import geocode_any
+                plat, plong, provider = geocode_any(jr.requester.pickup_address)
+                if plat and plong:
+                    # Compute base duration (origin -> destination)
+                    base_route = route_any([(pool.origin_lng, pool.origin_lat), (pool.dest_lng, pool.dest_lat)])
+                    if base_route and base_route.get('duration_seconds'):
+                        base_dur = int(round(base_route.get('duration_seconds')))
+                    else:
+                        miles = haversine_miles(pool.origin_lat, pool.origin_lng, pool.dest_lat, pool.dest_lng)
+                        base_dur = estimate_duration_seconds_from_meters(miles * 1609.344) if miles is not None else None
+
+                    # Compute detour: origin -> pickup -> destination
+                    detour_route = route_any([(pool.origin_lng, pool.origin_lat), (plong, plat), (pool.dest_lng, pool.dest_lat)])
+                    if detour_route and detour_route.get('duration_seconds'):
+                        detour_dur = int(round(detour_route.get('duration_seconds')))
+                    else:
+                        # Estimate by summing legs via haversine
+                        legs_miles = None
+                        try:
+                            m1 = haversine_miles(pool.origin_lat, pool.origin_lng, plat, plong)
+                            m2 = haversine_miles(plat, plong, pool.dest_lat, pool.dest_lng)
+                            if m1 is not None and m2 is not None:
+                                meters = (m1 + m2) * 1609.344
+                                detour_dur = estimate_duration_seconds_from_meters(meters)
+                            else:
+                                detour_dur = None
+                        except Exception:
+                            detour_dur = None
+
+                    if base_dur is not None and detour_dur is not None:
+                        added = detour_dur - base_dur
+                        if added < 0:
+                            added = 0
+                        jr.added_seconds = added
+                        hours, rem = divmod(added, 3600)
+                        mins = rem // 60
+                        jr.added_human = f"{hours}h {mins}m" if hours else f"{mins}m"
+        except Exception:
+            jr.added_seconds = None
+            jr.added_human = None
 
     return render_template('manage.html', owned_pools=owned_pools, my_requests=my_requests, my_rides=my_rides, owner_requests=owner_requests, owner_pools_info=owner_pools_info)
 
@@ -318,3 +468,55 @@ def cancel_request(req_id):
     db.session.commit()
     flash('Join request cancelled.', 'info')
     return redirect(url_for('main.manage'))
+
+
+@main_bp.route('/api/listings')
+def api_listings():
+    """Return JSON list of pools sorted by distance to a provided lat/lng.
+
+    Query params: lat, lng, max (optional, default 50), include_eta (optional, true/false)
+    """
+    try:
+        user_lat = request.args.get('lat', type=float)
+        user_lng = request.args.get('lng', type=float)
+    except Exception:
+        user_lat = None
+        user_lng = None
+    max_results = request.args.get('max', default=50, type=int)
+    include_eta = request.args.get('include_eta', default='false').lower() in ('1', 'true', 'yes')
+
+    pools = Pool.query.filter_by(cancelled=False).all()
+    results = []
+    for p in pools:
+        distance = None
+        if user_lat is not None and user_lng is not None and p.origin_lat is not None and p.origin_lng is not None:
+            distance = haversine_miles(user_lat, user_lng, p.origin_lat, p.origin_lng)
+        results.append({'pool': p, 'distance_miles': distance})
+
+    # sort pools - those without distance go to the end
+    results = sorted(results, key=lambda r: (r['distance_miles'] is None, r['distance_miles'] if r['distance_miles'] is not None else 1e9))
+
+    output = []
+    # Optionally include ETA using Mapbox for top N results
+    to_check = results[: min(len(results), max_results)]
+    for item in to_check:
+        p = item['pool']
+        row = p.serialize()
+        row['distance_miles'] = item['distance_miles']
+        if include_eta:
+            # only attempt ETA if we have both origin and destination coords
+            if p.origin_lng and p.origin_lat and p.dest_lng and p.dest_lat:
+                route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
+                if route and route.get('duration_seconds'):
+                    row['eta_seconds'] = route.get('duration_seconds')
+                    row['route_distance_meters'] = route.get('distance_meters')
+                else:
+                    # fallback: estimate using haversine distance
+                    miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                    if miles is not None:
+                        meters = miles * 1609.344
+                        est = estimate_duration_seconds_from_meters(meters)
+                        row['eta_seconds'] = est
+        output.append(row)
+
+    return {'count': len(output), 'results': output}

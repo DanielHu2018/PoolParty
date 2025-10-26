@@ -56,6 +56,9 @@
                           {% if jr.message %}
                             <div class="muted">"{{ jr.message }}"</div>
                           {% endif %}
+                          {% if jr.added_human %}
+                            <div style="margin-top:6px;" class="muted">Adds <strong>{{ jr.added_human }}</strong> to route for pickup</div>
+                          {% endif %}
                         </div>
                         <div style="white-space:nowrap;">
                           <a href="{{ url_for('main.handle_request', req_id=jr.id, action='accept') }}" class="btn">Accept</a>

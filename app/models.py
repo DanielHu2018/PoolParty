@@ -27,7 +27,11 @@ class Pool(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(140), nullable=False)
     origin = db.Column(db.String(140), nullable=False)
+    origin_lat = db.Column(db.Float, nullable=True)
+    origin_lng = db.Column(db.Float, nullable=True)
     destination = db.Column(db.String(140), nullable=False)
+    dest_lat = db.Column(db.Float, nullable=True)
+    dest_lng = db.Column(db.Float, nullable=True)
     depart_time = db.Column(db.DateTime, nullable=True)
     seats = db.Column(db.Integer, default=1)
     description = db.Column(db.Text)
@@ -40,6 +44,24 @@ class Pool(db.Model):
 
     def __repr__(self):
         return f'<Pool {self.title} {self.origin}->{self.destination}>'
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'origin': self.origin,
+            'origin_lat': self.origin_lat,
+            'origin_lng': self.origin_lng,
+            'destination': self.destination,
+            'dest_lat': self.dest_lat,
+            'dest_lng': self.dest_lng,
+            'depart_time': self.depart_time.isoformat() if self.depart_time else None,
+            'seats': self.seats,
+            'description': self.description,
+            'cancelled': self.cancelled,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'owner_id': self.owner_id,
+        }
 
 
 class JoinRequest(db.Model):

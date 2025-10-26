@@ -27,6 +27,20 @@
                   <div class="pill">Depart: TBD</div>
                 {% endif %}
                 <div class="pill">Seats: {{ p.seats }}</div>
+                {# Show estimated travel time and arrival if available #}
+                {% if p.eta_human %}
+                  <div class="pill">Est travel: {{ p.eta_human }}</div>
+                  {% if p.eta_arrival %}
+                    <div class="pill">Arrive: {{ p.eta_arrival.strftime('%b %d, %Y %I:%M %p') }}</div>
+                  {% endif %}
+                {% endif %}
+                {# Show travel time from the current user's pickup location, if available #}
+                {% if current_user.is_authenticated and p.pickup_travel_human %}
+                  <div class="pill">From your pickup: {{ p.pickup_travel_human }}</div>
+                  {% if p.pickup_leave_by %}
+                    <div class="pill">Leave by: {{ p.pickup_leave_by.strftime('%b %d, %Y %I:%M %p') }}</div>
+                  {% endif %}
+                {% endif %}
                 <div class="pill">Posted by: {{ (p.owner.full_name or p.owner.username) if p.owner else 'Unknown' }}</div>
               </div>
 
@@ -35,8 +49,11 @@
               {% endif %}
             </div>
             <div class="card-footer">
-              <small class="muted">Posted {{ p.created_at.strftime('%b %d') }}</small>
-              <a class="btn" href="{{ url_for('main.pool_detail', pool_id=p.id) }}">View</a>
+          <small class="muted">Posted {{ p.created_at.strftime('%b %d') }}</small>
+          <a class="btn" href="{{ url_for('main.pool_detail', pool_id=p.id) }}">View</a>
+          {# Quick directions link: prefer addresses, else use coords if available #}
+          <a class="btn" target="_blank" rel="noopener"
+            href="{% if p.origin and p.destination %}https://www.google.com/maps/dir/?api=1&origin={{ p.origin|urlencode }}&destination={{ p.destination|urlencode }}&travelmode=driving{% elif p.origin_lat and p.origin_lng %}https://www.google.com/maps/search/?api=1&query={{ (p.origin_lat|string) ~ ',' ~ (p.origin_lng|string) }}{% else %}https://www.google.com/maps{% endif %}">Directions</a>
             </div>
           </article>
         {% endfor %}
