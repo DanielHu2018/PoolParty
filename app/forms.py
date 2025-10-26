@@ -35,7 +35,8 @@ class PoolForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(), Length(max=140)])
     origin = StringField('Origin', validators=[DataRequired(), Length(max=140)])
     destination = StringField('Destination', validators=[DataRequired(), Length(max=140)])
-    depart_time = DateTimeField('Departure time (YYYY-mm-dd HH:MM)', format='%Y-%m-%d %H:%M', validators=[Optional()])
+    # Keep the label short; show the expected format as a placeholder/example in the form
+    depart_time = DateTimeField('Departure time', format='%Y-%m-%d %H:%M', validators=[Optional()])
     seats = IntegerField('Seats', default=1, validators=[DataRequired(), NumberRange(min=1, max=10)])
     description = TextAreaField('Description', validators=[Optional(), Length(max=2000)])
     submit = SubmitField('Create Pool')

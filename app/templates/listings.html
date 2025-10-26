@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
-  <div class="container">
-    <div class="page-title">
+  <div class="page-card">
+      <div class="page-title">
       <h2>Ride Listings</h2>
       <div style="display:flex;gap:12px;align-items:center;">
         <form class="search-form" method="get" action="{{ url_for('main.listings') }}">
@@ -10,7 +10,7 @@
         </form>
         <div class="muted">Showing {{ pools|length }} results</div>
       </div>
-    </div>
+      </div>
 
     {% if pools %}
       <div class="listings-grid">

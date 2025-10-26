@@ -1,25 +1,70 @@
 :root {
-	--ocean-600: #007f7f; /* teal */
-	--ocean-400: #28b3b3;
+	--ocean-600: #a5b9bb; /* brighter teal for contrast with background */
+	--ocean-400: #6f9c9c;
+	--ocean-800: #004c52; /* darker teal for select headings */
 	--sand-100: #fff7ec; /* light sand */
 	--sand-300: #ffe9c6;
-	--coral: #ff6b6b; /* accent */
-	--text: #123; 
+	--coral: #879c9bcf; /* accent */
+	--text: #123;
 	--muted: #556;
 }
 
-body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; color:var(--text); background: linear-gradient(180deg, #fbf9f7 0%, var(--sand-100) 100%); }
+/* Dynamic moving background using the supplied Pexels photo.
+	 This uses a fixed, full-viewport pseudo-element so the image sits behind
+	 the site content and replaces visible whitespace. If you prefer to host
+	 the image locally, download it into `static/images/` and update the URL below. */
+body {
+	font-family: 'Helvetica Neue', 'Open Sans', sans-serif;
+	margin: 0;
+	padding: 0;
+	color: var(--text);
+	/* keep a subtle gradient as fallback for very small opacity */
+	background: linear-gradient(180deg, #fbf9f7 0%, var(--sand-100) 100%);
+	position: relative;
+	overflow-x: hidden;
+}
+
+body::before {
+	/* Pexels image (photo by Mikhail Nilov) used as a moving background */
+	content: "";
+	position: fixed;
+	inset: 0; /* top:0; right:0; bottom:0; left:0; */
+	background-image: url('https://images.pexels.com/photos/7676849/pexels-photo-7676849.jpeg');
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: cover;
+	z-index: -1; /* behind everything */
+		/* increase visibility: higher opacity and stronger color/contrast
+			 while keeping content readable. Tweak opacity to your taste. */
+		opacity: 0.36; /* was 0.14 — increases image visibility */
+		transform-origin: center;
+		filter: saturate(1.15) contrast(1.08) brightness(1.03);
+	pointer-events: none; /* let clicks pass through */
+	/* subtle slow floating animation to create motion */
+	animation: pp-bg-float 28s ease-in-out infinite;
+}
+
+@keyframes pp-bg-float {
+		0% { transform: translateY(0) scale(1.05); }
+		50% { transform: translateY(-3%) scale(1.09); }
+		100% { transform: translateY(0) scale(1.05); }
+}
+
+	/* Slightly reduce background intensity on small screens to keep text readable */
+	@media (max-width: 700px) {
+		body::before { opacity: 0.26; filter: saturate(1.05) contrast(1.04) brightness(1.02); }
+	}
 header { background: linear-gradient(90deg, var(--ocean-600), var(--ocean-400)); padding: 14px 24px; color: white; display:flex; justify-content:space-between; align-items:center; }
 header h1 { margin: 0; font-size: 1.4rem; }
-header h1 a { color: white; text-decoration: none; }
-header nav a { color: rgba(255,255,255,0.95); margin-left: 14px; text-decoration: none; font-weight:600; }
+header h1 a { color: white; text-decoration: none; text-shadow: -1px -1px 0 rgba(0,0,0,0.3), 1px -1px 0 rgba(0,0,0,0.3), -1px 1px 0 rgba(0,0,0,0.3), 1px 1px 0 rgba(0,0,0,0.3); }
+header nav a { color: rgba(255,255,255,0.95); margin-left: 14px; text-decoration: none; font-weight:600; text-shadow: -1px -1px 0 rgba(0,0,0,0.3), 1px -1px 0 rgba(0,0,0,0.3), -1px 1px 0 rgba(0,0,0,0.3), 1px 1px 0 rgba(0,0,0,0.3); }
 header nav a:hover { opacity: 0.95; text-decoration: underline; }
 
 .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
 main { padding: 18px 0; }
 
 .page-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
-.page-title h2 { margin:0; color:var(--ocean-600); }
+.page-title h2 { margin:0; color: var(--ocean-800); }
 
 .listings-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:18px; }
 .card { background: white; border-radius: 10px; box-shadow: 0 6px 18px rgba(18,36,56,0.08); overflow: hidden; display:flex; flex-direction:column; transition: transform .14s ease, box-shadow .14s ease; }
@@ -75,17 +120,73 @@ p { line-height:1.5; color:#2f454b; }
 a { color:var(--ocean-600); }
 a:hover { text-decoration:underline; }
 
+/* Make input/textarea placeholders match other example text (.muted) */
+input::placeholder,
+textarea::placeholder,
+select::placeholder {
+	color: var(--muted);
+	opacity: 1; /* override browsers that dim placeholders */
+	font-style: normal;
+	font-family: inherit;
+}
+
+/* Keep outlines/borders consistent for all inputs including departure time */
+input, textarea, select {
+	border: 1px solid #e6e6e6;
+	border-radius: 8px;
+}
+
+input:focus, textarea:focus, select:focus {
+	outline: none;
+	/* subtle focus ring matched to theme but not too strong */
+	box-shadow: 0 0 0 3px rgba(0,153,166,0.06);
+	border-color: #dfeff0;
+}
+
+/* Specific styling for the pickup_notes placeholder so it matches other example text */
+.pickup-notes { font-family: inherit; font-size: 0.98rem; }
+.pickup-notes::placeholder { color: #6b7b80; opacity: 1; font-style: normal; font-family: inherit; }
+
 /* container list defaults (non-card lists) */
 .container ul { list-style:none; padding:0; margin:0; }
 .container ul li { padding:10px 0; border-bottom:1px solid #f1efe9; }
 
 /* main nav */
-.main-nav a { margin-left:14px; color:rgba(255,255,255,0.95); text-decoration:none; font-weight:600; }
+.main-nav a { margin-left:14px; color:rgba(255,255,255,0.95); text-decoration:none; font-weight:600; text-shadow: -1px -1px 0 rgba(0,0,0,0.3), 1px -1px 0 rgba(0,0,0,0.3), -1px 1px 0 rgba(0,0,0,0.3), 1px 1px 0 rgba(0,0,0,0.3); }
 .site-title { font-size:1.4rem; margin:0; }
-.site-title a { color:white; text-decoration:none; }
+.site-title a { color:white; text-decoration:none; text-shadow: -1px -1px 0 rgba(0,0,0,0.3), 1px -1px 0 rgba(0,0,0,0.3), -1px 1px 0 rgba(0,0,0,0.3), 1px 1px 0 rgba(0,0,0,0.3); }
 
 /* small tweaks for manage/profile/create pages */
 .muted small, .muted { color:#6b7b80; }
 
 /* field error display */
 .field-error { color: var(--coral); font-size:0.92rem; margin-top:6px; }
+
+/* Page-level container card (used by listings/manage pages) */
+.page-card {
+	max-width: 1100px;
+	margin: 18px auto;
+	background: rgba(255,255,255,0.96);
+	border-radius: 12px;
+	box-shadow: 0 10px 30px rgba(12,32,48,0.08);
+	padding: 20px 22px;
+}
+
+@media (max-width: 700px) {
+	.page-card { margin: 12px; padding: 14px; border-radius: 10px; }
+}
+
+/* Section-level card used inside page-card to group related content blocks */
+.section-card {
+	background: #fff;
+	border-radius: 10px;
+	padding: 16px;
+	box-shadow: 0 6px 18px rgba(18,36,56,0.06);
+	margin-bottom: 16px;
+}
+
+.section-card h3 { margin-top: 0; margin-bottom: 10px; color: var(--ocean-800); }
+
+@media (max-width: 700px) {
+	.section-card { padding: 12px; }
+}

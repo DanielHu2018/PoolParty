@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
-  <h2>Manage</h2>
+  <div class="page-card">
+    <h2>Manage</h2>
 
-  <h3>Your pools</h3>
-  {% if owner_pools_info %}
-    <div class="listings-grid">
+    <section class="section-card">
+      <h3>Your pools</h3>
+      {% if owner_pools_info %}
+        <div class="listings-grid">
       {% for info in owner_pools_info %}
         {% set p = info.pool %}
         <div class="card">
@@ -70,15 +72,17 @@
           </div>
         </div>
       {% endfor %}
-    </div>
-  {% else %}
-    <p>You do not own any pools.</p>
-  {% endif %}
+        </div>
+      {% else %}
+        <p>You do not own any pools.</p>
+      {% endif %}
+    </section>
   {# Requests are shown inside each pool card (Pending requests) - removed duplicate section #}
 
-  <h3>Pools you're riding in</h3>
-  {% if my_rides %}
-    <div class="listings-grid">
+    <section class="section-card">
+      <h3>Pools you're riding in</h3>
+      {% if my_rides %}
+        <div class="listings-grid">
       {% for ride in my_rides %}
         <div class="card">
           <div class="card-body">
@@ -93,14 +97,16 @@
           </div>
         </div>
       {% endfor %}
-    </div>
-  {% else %}
-    <p>You are not riding in any pools.</p>
-  {% endif %}
+        </div>
+      {% else %}
+        <p>You are not riding in any pools.</p>
+      {% endif %}
+    </section>
 
-  <h3>Your join requests</h3>
-  {% if my_requests %}
-    <div class="listings-grid">
+    <section class="section-card">
+      <h3>Your join requests</h3>
+      {% if my_requests %}
+        <div class="listings-grid">
       {% for r in my_requests %}
         <div class="card">
           <div class="card-body">
@@ -123,8 +129,10 @@
           </div>
         </div>
       {% endfor %}
-    </div>
-  {% else %}
-    <p>No requests.</p>
-  {% endif %}
+        </div>
+      {% else %}
+        <p>No requests.</p>
+      {% endif %}
+    </section>
+  </div>
 {% endblock %}
