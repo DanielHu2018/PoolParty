@@ -10,68 +10,105 @@
       {% for info in owner_pools_info %}
         {% set p = info.pool %}
         <div class="card">
+          {# move more button to be a direct child of .card so absolute positioning is relative to the card #}
+          <button class="more-btn" type="button" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div class="more-menu" role="menu">
+            <a class="more-action" href="{{ url_for('main.edit_pool', pool_id=p.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('main.cancel_pool', pool_id=p.id) }}" style="margin:0;">
+              <button type="submit" class="more-action more-action-btn">Cancel Pool</button>
+            </form>
+          </div>
+
           <div class="card-body">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="card-top-row">
               <div>
                 <div class="card-title">{{ p.title }}</div>
                 <div class="card-route">{{ p.origin }} → {{ p.destination }} {% if p.depart_time %}• {{ p.depart_time.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
                 <div class="card-meta">
                   <span class="pill">Seats: {{ p.seats }}</span>
-                  <a href="{{ url_for('main.pool_detail', pool_id=p.id) }}" class="muted">View</a>
                 </div>
               </div>
-              <div>
-                <form method="post" action="{{ url_for('main.cancel_pool', pool_id=p.id) }}" style="display:inline">
-                  <button type="submit" class="btn secondary">Cancel Pool</button>
-                </form>
-              </div>
-            </div>
 
             <div style="margin-top:6px;">
-              <strong>Riders</strong>
-              <ul>
+              <div class="list-item-grid" style="padding:0;">
+                <div></div>
+                <div>
+                  <strong>Riders</strong>
+                  <ul class="rider-list">
                 {% if info.riders %}
                   {% for item in info.riders %}
-                    <li>{{ item.user.username }} {% if item.ride.status != 'cancelled' %} — {{ item.ride.status }}{% else %} — <em>cancelled</em>{% endif %}
-                      <form method="post" action="{{ url_for('main.remove_rider', pool_id=p.id, user_id=item.user.id) }}" style="display:inline;margin-left:8px;">
-                        <button type="submit" class="btn secondary">Remove</button>
-                      </form>
+                    <li class="list-item-grid">
+                      <div class="rider-action">
+                        <form method="post" action="{{ url_for('main.remove_rider', pool_id=p.id, user_id=item.user.id) }}" style="display:inline;margin:0;">
+                          <button type="submit" class="btn secondary">Remove</button>
+                        </form>
+                      </div>
+                      <div class="rider-name">
+                        {{ item.user.username }} {% if item.ride.status == 'cancelled' %} — <em>cancelled</em>{% endif %}
+                      </div>
+                      <div class="rider-right"></div>
                     </li>
                   {% endfor %}
                 {% else %}
-                  <li class="muted">No riders yet.</li>
+                  <li class="list-item-grid muted">
+                    <div></div>
+                    <div>No riders yet.</div>
+                    <div></div>
+                  </li>
                 {% endif %}
-              </ul>
+                  </ul>
+                </div>
+                <div></div>
+              </div>
             </div>
-
             <div style="margin-top:8px;">
-              <strong>Pending requests</strong>
-              <ul>
+              <div class="list-item-grid" style="padding:0;">
+                <div></div>
+                <div>
+                  <strong>Pending requests</strong>
+                  <ul>
                 {% if info.requests %}
                   {% for jr in info.requests %}
-                    <li>
-                      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-                        <div>
-                          <div><strong>{{ jr.requester.username }}</strong> <span class="muted">({{ jr.requester.email }})</span></div>
-                          {% if jr.message %}
-                            <div class="muted">"{{ jr.message }}"</div>
-                          {% endif %}
-                          {% if jr.added_human %}
-                            <div style="margin-top:6px;" class="muted">Adds <strong>{{ jr.added_human }}</strong> to route for pickup</div>
-                          {% endif %}
-                        </div>
-                        <div style="white-space:nowrap;">
-                          <a href="{{ url_for('main.handle_request', req_id=jr.id, action='accept') }}" class="btn">Accept</a>
-                          <a href="{{ url_for('main.handle_request', req_id=jr.id, action='reject') }}" class="btn secondary">Reject</a>
-                        </div>
+                    <li class="list-item-grid">
+                      <div></div>
+                      <div>
+                        <div><strong>{{ jr.requester.username }}</strong> <span class="muted">({{ jr.requester.email }})</span></div>
+                        {% if jr.message %}
+                          <div class="muted">"{{ jr.message }}"</div>
+                        {% endif %}
+                        {% if jr.added_human %}
+                          <div style="margin-top:6px;" class="muted">Adds <strong>{{ jr.added_human }}</strong> to route for pickup</div>
+                        {% endif %}
+                      </div>
+                      <div style="white-space:nowrap;">
+                        <a href="{{ url_for('main.handle_request', req_id=jr.id, action='accept') }}" class="btn">Accept</a>
+                        <a href="{{ url_for('main.handle_request', req_id=jr.id, action='reject') }}" class="btn secondary">Reject</a>
                       </div>
                     </li>
                   {% endfor %}
                 {% else %}
-                  <li class="muted">No pending requests.</li>
+                  <li class="list-item-grid muted">
+                    <div></div>
+                    <div class="muted">No pending requests.</div>
+                    <div></div>
+                  </li>
                 {% endif %}
-              </ul>
+                  </ul>
+                </div>
+                <div></div>
+              </div>
             </div>
+          </div>
+          {# card footer: directions button and posted date #}
+          <div class="card-footer">
+            <small class="muted">Posted {{ p.created_at.strftime('%b %d') }}</small>
+            {# Directions button available to the owner (open in new tab) #}
+            {% if p.origin_lat and p.dest_lat and p.origin_lng and p.dest_lng %}
+              {% set dir_url = 'https://www.google.com/maps/dir/?api=1&origin=' ~ p.origin_lat ~ ',' ~ p.origin_lng ~ '&destination=' ~ p.dest_lat ~ ',' ~ p.dest_lng %}
+              {% else %}
+              {% set dir_url = 'https://www.google.com/maps/dir/?api=1&origin=' ~ p.origin|replace(' ', '+') ~ '&destination=' ~ p.destination|replace(' ', '+') %}
+            {% endif %}
+            <a class="btn" href="{{ dir_url }}" target="_blank" rel="noopener">Directions</a>
           </div>
         </div>
       {% endfor %}
@@ -87,13 +124,20 @@
       {% if my_rides %}
         <div class="listings-grid">
       {% for ride in my_rides %}
+        {% set rp = ride.pool %}
         <div class="card">
           <div class="card-body">
-            <div class="card-title">{{ ride.pool.title }}</div>
-            <div class="card-route">{{ ride.pool.origin }} → {{ ride.pool.destination }}</div>
+            <div class="card-title">{{ rp.title }}</div>
+            <div class="card-route">{{ rp.origin }} → {{ rp.destination }}</div>
             <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-              <a href="{{ url_for('main.pool_detail', pool_id=ride.pool.id) }}" class="btn">View</a>
-              <form method="post" action="{{ url_for('main.leave_pool', pool_id=ride.pool.id) }}" style="display:inline">
+              {# Directions button for rider's pools #}
+              {% if rp.origin_lat and rp.dest_lat and rp.origin_lng and rp.dest_lng %}
+                {% set dir_url = 'https://www.google.com/maps/dir/?api=1&origin=' ~ rp.origin_lat ~ ',' ~ rp.origin_lng ~ '&destination=' ~ rp.dest_lat ~ ',' ~ rp.dest_lng %}
+              {% else %}
+                {% set dir_url = 'https://www.google.com/maps/dir/?api=1&origin=' ~ rp.origin|replace(' ', '+') ~ '&destination=' ~ rp.destination|replace(' ', '+') %}
+              {% endif %}
+              <a class="btn" href="{{ dir_url }}" target="_blank" rel="noopener">Directions</a>
+              <form method="post" action="{{ url_for('main.leave_pool', pool_id=rp.id) }}" style="display:inline">
                 <button type="submit" class="btn secondary">Leave</button>
               </form>
             </div>
@@ -122,8 +166,15 @@
                   <div style="margin-top:6px;" class="muted">"{{ r.message }}"</div>
                 {% endif %}
               </div>
-              <div style="white-space:nowrap;display:flex;gap:8px;align-items:center;">
-                <a href="{{ url_for('main.pool_detail', pool_id=r.pool.id) }}" class="btn">View</a>
+                <div style="white-space:nowrap;display:flex;gap:8px;align-items:center;">
+                {# Replace View with Directions for join requests context #}
+                {% set rp = r.pool %}
+                {% if rp.origin_lat and rp.dest_lat and rp.origin_lng and rp.dest_lng %}
+                  {% set dir_url = 'https://www.google.com/maps/dir/?api=1&origin=' ~ rp.origin_lat ~ ',' ~ rp.origin_lng ~ '&destination=' ~ rp.dest_lat ~ ',' ~ rp.dest_lng %}
+                {% else %}
+                  {% set dir_url = 'https://www.google.com/maps/dir/?api=1&origin=' ~ rp.origin|replace(' ', '+') ~ '&destination=' ~ rp.destination|replace(' ', '+') %}
+                {% endif %}
+                <a class="btn" href="{{ dir_url }}" target="_blank" rel="noopener">Directions</a>
                 <form method="post" action="{{ url_for('main.cancel_request', req_id=r.id) }}" style="display:inline">
                   <button type="submit" class="btn secondary">Cancel</button>
                 </form>
@@ -138,4 +189,38 @@
       {% endif %}
     </section>
   </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Manage page: wire up more-menu toggles and close on outside click
+document.addEventListener('click', function _closeMenus(e){
+  // If clicked on a more-btn, toggle its menu
+  var btn = e.target.closest && e.target.closest('.more-btn');
+  if(btn){
+    e.stopPropagation();
+    // close other open menus
+    document.querySelectorAll('.more-menu.show').forEach(function(m){ if(m.previousElementSibling !== btn) m.classList.remove('show'); });
+    var menu = btn.nextElementSibling;
+    if(menu) menu.classList.toggle('show');
+    return;
+  }
+  // otherwise click outside: close all menus
+  document.querySelectorAll('.more-menu.show').forEach(function(m){ m.classList.remove('show'); });
+});
+// Close menus on Escape key
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' || e.key === 'Esc'){
+    document.querySelectorAll('.more-menu.show').forEach(function(m){ m.classList.remove('show'); });
+  }
+});
+
+// If a more-menu item is clicked, close menus (lets navigation proceed)
+document.addEventListener('click', function _menuItemClose(e){
+  if(e.target.closest && e.target.closest('.more-menu')){
+    // give the browser a tick to handle navigation/submission then close
+    setTimeout(function(){ document.querySelectorAll('.more-menu.show').forEach(function(m){ m.classList.remove('show'); }); }, 20);
+  }
+});
+</script>
 {% endblock %}

@@ -5,8 +5,16 @@ from .models import Pool, JoinRequest, Ride, User
 from .geo import geocode_mapbox, haversine_miles, route_any, estimate_duration_seconds_from_meters
 from sqlalchemy.exc import OperationalError
 from . import db
-from datetime import timedelta
+from datetime import datetime, timedelta
+
+# If a computed/persisted ETA exceeds this (seconds) we'll flag it as suspicious in the UI
+ETA_FLAG_THRESHOLD_SECONDS = 6 * 3600  # 6 hours
 # (no direct 'or_' usage in this module)
+
+# Hard-coded example gas cost assumptions (example values)
+# You can later make these configurable via settings or per-user preferences
+GAS_PRICE_PER_GALLON = 3.50  # USD per gallon (example)
+VEHICLE_MPG = 30.0  # average miles per gallon (example)
 
 """
 Primary application routes were removed to leave a structural scaffold. Add
@@ -51,43 +59,187 @@ def listings():
         user_pickup_lat = None
         user_pickup_lng = None
 
-    for p in pools:
+    # simple pagination so the listings page doesn't try to render an enormous list at once
+    page = request.args.get('page', default=1, type=int) or 1
+    per_page = 12
+    total_pools = len(pools)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paged_pools = pools[start:end]
+
+    for p in paged_pools:
         # default: no eta
         p.eta_seconds = None
         p.eta_human = None
         p.eta_arrival = None
-        # pickup-specific timings for the current user
+        # Ensure cost/display attributes exist to avoid template undefined errors
+        p.travel_distance_miles = None
+        p.cost_total = None
+        p.cost_per_rider = None
+
+        # If a persisted ETA exists on the pool, prefer that (useful for listings created earlier)
+        if hasattr(p, 'eta_seconds') and p.eta_seconds is not None:
+            try:
+                dur = int(p.eta_seconds)
+                p.eta_seconds = dur
+                hours, rem = divmod(dur, 3600)
+                mins = rem // 60
+                p.eta_human = f"{hours}h {mins}m" if hours else f"{mins}m"
+                if p.depart_time:
+                    try:
+                        p.eta_arrival = p.depart_time + timedelta(seconds=dur)
+                    except Exception:
+                        p.eta_arrival = None
+            except Exception:
+                p.eta_seconds = None
+                p.eta_human = None
+                p.eta_arrival = None
+        else:
+            # compute ETA for origin -> destination using road routing when available
+            try:
+                if hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng and p.dest_lat and p.dest_lng:
+                    route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
+                    if route and route.get('duration_seconds'):
+                        # sanity-check route result; fall back to haversine estimate if unreasonable
+                        from .geo import route_result_is_reasonable
+                        if not route_result_is_reasonable(route, p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng):
+                            # suspicious routing result (very long or far off); fallback
+                            miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                            if miles is not None:
+                                meters = miles * 1609.344
+                                dur = estimate_duration_seconds_from_meters(meters)
+                            else:
+                                dur = None
+                        else:
+                            dur = int(round(route.get('duration_seconds')))
+                    else:
+                        # fallback: estimate from haversine distance between origin and destination
+                        miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                        if miles is not None:
+                            meters = miles * 1609.344
+                            dur = estimate_duration_seconds_from_meters(meters)
+                        else:
+                            dur = None
+
+                    if dur:
+                        p.eta_seconds = dur
+                        hours, rem = divmod(dur, 3600)
+                        mins = rem // 60
+                        p.eta_human = f"{hours}h {mins}m" if hours else f"{mins}m"
+                        if p.depart_time:
+                            try:
+                                p.eta_arrival = p.depart_time + timedelta(seconds=dur)
+                            except Exception:
+                                p.eta_arrival = None
+                    # compute route distance (miles) for cost estimation
+                    p.travel_distance_miles = None
+                    if route and route.get('distance_meters'):
+                        try:
+                            p.travel_distance_miles = float(route.get('distance_meters')) / 1609.344
+                        except Exception:
+                            p.travel_distance_miles = None
+                    else:
+                        try:
+                            miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                            p.travel_distance_miles = miles
+                        except Exception:
+                            p.travel_distance_miles = None
+                    # estimate gas cost (hard-coded example): total cost = (distance / mpg) * gas_price
+                    p.cost_total = None
+                    p.cost_per_rider = None
+                    try:
+                        if p.travel_distance_miles:
+                            total_gallons = float(p.travel_distance_miles) / float(VEHICLE_MPG)
+                            total_cost = total_gallons * float(GAS_PRICE_PER_GALLON)
+                            p.cost_total = round(total_cost, 2)
+                            # Split cost by the number of seats originally listed for the pool.
+                            # If seats is not set or invalid, fall back to 1 to avoid division by zero.
+                            try:
+                                seats = int(p.seats) if (hasattr(p, 'seats') and p.seats and int(p.seats) > 0) else 1
+                            except Exception:
+                                seats = 1
+                            p.cost_per_rider = round(total_cost / float(seats), 2)
+                    except Exception:
+                        p.cost_total = None
+                        p.cost_per_rider = None
+                    # compute a display ETA that is capped/adjusted when route seems unreasonable
+                    p.eta_seconds_display = p.eta_seconds
+                    p.eta_human_display = p.eta_human
+                    p.eta_arrival_display = p.eta_arrival
+                    try:
+                        # if coords exist compute straight-line estimate
+                        if hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng and p.dest_lat and p.dest_lng:
+                            miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                            if miles is not None:
+                                est = estimate_duration_seconds_from_meters(miles * 1609.344)
+                            else:
+                                est = None
+                            # If route duration is massively larger than straight-line estimate and the straight-line
+                            # distance is small (likely ambiguous geocode), prefer an adjusted estimate.
+                            if p.eta_seconds and est and p.eta_seconds > (4 * 3600) and p.eta_seconds > (est * 5) and miles < 10:
+                                adj = int(max(60, round(est * 1.2)))
+                                p.eta_seconds_display = adj
+                                ph, prem = divmod(adj, 3600)
+                                p.eta_human_display = f"{ph}h {prem//60}m" if ph else f"{prem//60}m"
+                                if p.depart_time:
+                                    try:
+                                        p.eta_arrival_display = p.depart_time + timedelta(seconds=adj)
+                                    except Exception:
+                                        p.eta_arrival_display = None
+                                p.eta_flagged = True
+                    except Exception:
+                        pass
+                    # flag suspiciously large ETAs for UI
+                    p.eta_flagged = True if (hasattr(p, 'eta_seconds') and p.eta_seconds and p.eta_seconds > ETA_FLAG_THRESHOLD_SECONDS) else False
+            except Exception:
+                p.eta_seconds = None
+                p.eta_human = None
+                p.eta_arrival = None
+
+            # Ensure cost is computed for pools with coords even if ETA was persisted
+            try:
+                if hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng and p.dest_lat and p.dest_lng:
+                    # prefer routing distance when available
+                    try:
+                        r = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
+                    except Exception:
+                        r = None
+                    if r and r.get('distance_meters'):
+                        try:
+                            p.travel_distance_miles = float(r.get('distance_meters')) / 1609.344
+                        except Exception:
+                            p.travel_distance_miles = None
+                    else:
+                        try:
+                            p.travel_distance_miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                        except Exception:
+                            p.travel_distance_miles = None
+
+                    if p.travel_distance_miles:
+                        try:
+                            total_gallons = float(p.travel_distance_miles) / float(VEHICLE_MPG)
+                            total_cost = total_gallons * float(GAS_PRICE_PER_GALLON)
+                            p.cost_total = round(total_cost, 2)
+                            # split by originally listed seats (fallback to 1)
+                            try:
+                                seats = int(p.seats) if (hasattr(p, 'seats') and p.seats and int(p.seats) > 0) else 1
+                            except Exception:
+                                seats = 1
+                            p.cost_per_rider = round(total_cost / float(seats), 2)
+                        except Exception:
+                            p.cost_total = None
+                            p.cost_per_rider = None
+            except Exception:
+                # don't let cost computation break listings rendering
+                p.travel_distance_miles = None
+                p.cost_total = None
+                p.cost_per_rider = None
+
+    # pickup-specific timings for the current user
         p.pickup_travel_seconds = None
         p.pickup_travel_human = None
         p.pickup_leave_by = None
         try:
-            # ETA for origin -> destination using road routing when available
-            if hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng and p.dest_lat and p.dest_lng:
-                route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
-                if route and route.get('duration_seconds'):
-                    dur = int(round(route.get('duration_seconds')))
-                else:
-                    # fallback: estimate from haversine distance between origin and destination
-                    miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
-                    if miles is not None:
-                        meters = miles * 1609.344
-                        dur = estimate_duration_seconds_from_meters(meters)
-                    else:
-                        dur = None
-
-                if dur:
-                    p.eta_seconds = dur
-                    hours, rem = divmod(dur, 3600)
-                    mins = rem // 60
-                    p.eta_human = f"{hours}h {mins}m" if hours else f"{mins}m"
-                    if p.depart_time:
-                        try:
-                            p.eta_arrival = p.depart_time + timedelta(seconds=dur)
-                        except Exception:
-                            p.eta_arrival = None
-
-            # If we have a logged-in user's pickup coords and the pool has origin coords,
-            # compute travel time from pickup -> origin so we can show leave-by time.
             if user_pickup_lat and user_pickup_lng and hasattr(p, 'origin_lat') and p.origin_lat and p.origin_lng:
                 proute = route_any([(user_pickup_lng, user_pickup_lat), (p.origin_lng, p.origin_lat)])
                 if proute and proute.get('duration_seconds'):
@@ -111,14 +263,16 @@ def listings():
                         except Exception:
                             p.pickup_leave_by = None
         except Exception:
-            # any error in calling external API should not break listings
-            p.eta_seconds = None
-            p.eta_human = None
-            p.eta_arrival = None
             p.pickup_travel_seconds = None
             p.pickup_travel_human = None
             p.pickup_leave_by = None
-    return render_template('listings.html', pools=pools, q=q)
+        # ensure eta_flagged exists even if no eta computed
+        if not hasattr(p, 'eta_flagged'):
+            p.eta_flagged = False
+    # build next page url if needed
+    has_next = end < total_pools
+    next_page = page + 1 if has_next else None
+    return render_template('listings.html', pools=paged_pools, q=q, page=page, next_page=next_page)
 
 
 @main_bp.route('/pool/create', methods=['GET', 'POST'])
@@ -144,10 +298,86 @@ def create_pool():
                 pool.dest_lng = dlng
         except Exception:
             pass
+        # Compute and persist ETA (origin -> destination) at creation time when coords available
+        try:
+            if hasattr(pool, 'origin_lat') and pool.origin_lat and pool.origin_lng and pool.dest_lat and pool.dest_lng:
+                route = route_any([(pool.origin_lng, pool.origin_lat), (pool.dest_lng, pool.dest_lat)])
+                if route and route.get('duration_seconds'):
+                    pool.eta_seconds = int(round(route.get('duration_seconds')))
+                    pool.eta_updated_at = datetime.utcnow()
+                else:
+                    miles = haversine_miles(pool.origin_lat, pool.origin_lng, pool.dest_lat, pool.dest_lng)
+                    if miles is not None:
+                        meters = miles * 1609.344
+                        est = estimate_duration_seconds_from_meters(meters)
+                        if est:
+                            pool.eta_seconds = int(est)
+                            pool.eta_updated_at = datetime.utcnow()
+        except Exception:
+            # fail silently; ETA will be computed on-demand in listings
+            pass
         db.session.add(pool)
         db.session.commit()
         flash('Pool created.', 'success')
         return redirect(url_for('main.pool_detail', pool_id=pool.id))
+    return render_template('create_pool.html', form=form)
+
+
+@main_bp.route('/pool/<int:pool_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_pool(pool_id):
+    pool = Pool.query.get_or_404(pool_id)
+    # only owner can edit
+    if pool.owner_id != current_user.id:
+        flash('Unauthorized', 'danger')
+        return redirect(url_for('main.manage'))
+    form = PoolForm(obj=pool)
+    if form.validate_on_submit():
+        # update fields
+        pool.title = form.title.data
+        pool.origin = form.origin.data
+        pool.destination = form.destination.data
+        pool.depart_time = form.depart_time.data
+        pool.seats = form.seats.data
+        pool.description = form.description.data
+
+        # attempt to geocode origin/destination if changed
+        try:
+            lat, lng = geocode_mapbox(pool.origin)
+            if lat and lng:
+                pool.origin_lat = lat
+                pool.origin_lng = lng
+        except Exception:
+            pass
+        try:
+            dlat, dlng = geocode_mapbox(pool.destination)
+            if dlat and dlng:
+                pool.dest_lat = dlat
+                pool.dest_lng = dlng
+        except Exception:
+            pass
+
+        # recompute and persist ETA if coords available
+        try:
+            if hasattr(pool, 'origin_lat') and pool.origin_lat and pool.origin_lng and pool.dest_lat and pool.dest_lng:
+                route = route_any([(pool.origin_lng, pool.origin_lat), (pool.dest_lng, pool.dest_lat)])
+                if route and route.get('duration_seconds'):
+                    pool.eta_seconds = int(round(route.get('duration_seconds')))
+                    pool.eta_updated_at = datetime.utcnow()
+                else:
+                    miles = haversine_miles(pool.origin_lat, pool.origin_lng, pool.dest_lat, pool.dest_lng)
+                    if miles is not None:
+                        meters = miles * 1609.344
+                        est = estimate_duration_seconds_from_meters(meters)
+                        if est:
+                            pool.eta_seconds = int(est)
+                            pool.eta_updated_at = datetime.utcnow()
+        except Exception:
+            pass
+
+        db.session.commit()
+        flash('Pool updated.', 'success')
+        return redirect(url_for('main.manage'))
     return render_template('create_pool.html', form=form)
 
 
@@ -506,17 +736,24 @@ def api_listings():
         if include_eta:
             # only attempt ETA if we have both origin and destination coords
             if p.origin_lng and p.origin_lat and p.dest_lng and p.dest_lat:
-                route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
-                if route and route.get('duration_seconds'):
-                    row['eta_seconds'] = route.get('duration_seconds')
-                    row['route_distance_meters'] = route.get('distance_meters')
+                # prefer persisted ETA when present
+                if hasattr(p, 'eta_seconds') and p.eta_seconds:
+                    row['eta_seconds'] = p.eta_seconds
+                    row['eta_source'] = 'persisted'
                 else:
-                    # fallback: estimate using haversine distance
-                    miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
-                    if miles is not None:
-                        meters = miles * 1609.344
-                        est = estimate_duration_seconds_from_meters(meters)
-                        row['eta_seconds'] = est
+                    route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
+                    if route and route.get('duration_seconds'):
+                        row['eta_seconds'] = route.get('duration_seconds')
+                        row['route_distance_meters'] = route.get('distance_meters')
+                        row['eta_source'] = 'routing'
+                    else:
+                        # fallback: estimate using haversine distance
+                        miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                        if miles is not None:
+                            meters = miles * 1609.344
+                            est = estimate_duration_seconds_from_meters(meters)
+                            row['eta_seconds'] = est
+                            row['eta_source'] = 'estimate'
         output.append(row)
 
     return {'count': len(output), 'results': output}

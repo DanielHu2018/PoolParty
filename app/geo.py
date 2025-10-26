@@ -212,6 +212,47 @@ def estimate_duration_seconds_from_meters(distance_meters, avg_speed_mph=35):
         return None
 
 
+def route_result_is_reasonable(route, lat1, lon1, lat2, lon2, max_duration_seconds=86400, max_distance_ratio=10.0):
+    """Basic sanity checks for a routing result.
+
+    - If route is None, return False.
+    - If route duration > max_duration_seconds (default 24h) return False.
+    - If route distance is more than max_distance_ratio times straight-line distance, return False.
+
+    Returns True if route appears reasonable.
+    """
+    try:
+        if not route:
+            return False
+        dur = route.get('duration_seconds')
+        dist = route.get('distance_meters')
+        if dur is None or dist is None:
+            return True  # can't judge, assume ok
+        if dur > max_duration_seconds:
+            return False
+        # compute straight-line meters
+        miles = haversine_miles(lat1, lon1, lat2, lon2)
+        if miles is None:
+            return True
+        straight_m = miles * 1609.344
+        if straight_m <= 0:
+            return True
+        # distance ratio check
+        if dist / straight_m > max_distance_ratio:
+            return False
+        # duration ratio check: ensure route duration isn't wildly larger than a straight-line estimate
+        try:
+            # estimate duration at a reasonable avg speed (35 mph)
+            est_dur = estimate_duration_seconds_from_meters(straight_m, avg_speed_mph=35)
+            if est_dur and dur / est_dur > 5.0:
+                return False
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
 def route_any(coords):
     """Try Mapbox, then OSRM, then return None.
 

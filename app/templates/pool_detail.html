@@ -7,12 +7,7 @@
           <div class="card-title">{{ pool.title }}</div>
           <div class="card-route">{{ pool.origin }} → {{ pool.destination }} {% if pool.depart_time %}• {{ pool.depart_time.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
           <div style="margin-top:8px;">
-            <a class="btn" target="_blank" rel="noopener" href="{{ url_for('static', filename='') }}"> </a>
-            {# Google Maps directions link: prefer addresses, fall back to coords #}
-            <a class="btn" target="_blank" rel="noopener"
-               href="{{ ('https://www.google.com/maps/dir/?api=1&origin=' + pool.origin|urlencode + '&destination=' + pool.destination|urlencode + '&travelmode=driving') if pool.origin and pool.destination else ('https://www.google.com/maps/search/?api=1&query=' + (pool.origin|urlencode if pool.origin else (pool.origin_lat ~ ',' ~ pool.origin_lng))) }}">
-              Directions
-            </a>
+            {# Directions link removed from pool detail; drivers can access directions from Manage #}
           </div>
           <div class="card-desc" style="margin-top:10px;">{{ pool.description or "No description provided." }}</div>
 

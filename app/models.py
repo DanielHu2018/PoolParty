@@ -32,6 +32,9 @@ class Pool(db.Model):
     destination = db.Column(db.String(140), nullable=False)
     dest_lat = db.Column(db.Float, nullable=True)
     dest_lng = db.Column(db.Float, nullable=True)
+    # Persisted ETA for the trip (seconds) and timestamp when it was computed
+    eta_seconds = db.Column(db.Integer, nullable=True)
+    eta_updated_at = db.Column(db.DateTime, nullable=True)
     depart_time = db.Column(db.DateTime, nullable=True)
     seats = db.Column(db.Integer, default=1)
     description = db.Column(db.Text)
@@ -61,6 +64,8 @@ class Pool(db.Model):
             'cancelled': self.cancelled,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'owner_id': self.owner_id,
+            'eta_seconds': self.eta_seconds,
+            'eta_updated_at': self.eta_updated_at.isoformat() if self.eta_updated_at else None,
         }
 
 

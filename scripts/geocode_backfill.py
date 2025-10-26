@@ -60,6 +60,43 @@ def main():
             if updated:
                 db.session.add(p)
 
+            # If coords are present now, try to compute and persist ETA (origin -> destination)
+            try:
+                if p.origin_lat and p.origin_lng and p.dest_lat and p.dest_lng and (p.eta_seconds is None):
+                    from app.geo import route_any, haversine_miles, estimate_duration_seconds_from_meters
+                    route = route_any([(p.origin_lng, p.origin_lat), (p.dest_lng, p.dest_lat)])
+                    if route and route.get('duration_seconds'):
+                        # Sanity-check route result to avoid absurd cross-continent routes
+                        from app.geo import route_result_is_reasonable
+                        if route_result_is_reasonable(route, p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng):
+                            p.eta_seconds = int(round(route.get('duration_seconds')))
+                            p.eta_updated_at = __import__('datetime').datetime.utcnow()
+                            db.session.add(p)
+                            print(f'Pool {p.id}: ETA set -> {p.eta_seconds}s via routing')
+                        else:
+                            # fallback to straight-line estimate
+                            miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                            if miles is not None:
+                                meters = miles * 1609.344
+                                est = estimate_duration_seconds_from_meters(meters)
+                                if est:
+                                    p.eta_seconds = int(est)
+                                    p.eta_updated_at = __import__('datetime').datetime.utcnow()
+                                    db.session.add(p)
+                                    print(f'Pool {p.id}: ETA estimated -> {p.eta_seconds}s (routing result rejected)')
+                    else:
+                        miles = haversine_miles(p.origin_lat, p.origin_lng, p.dest_lat, p.dest_lng)
+                        if miles is not None:
+                            meters = miles * 1609.344
+                            est = estimate_duration_seconds_from_meters(meters)
+                            if est:
+                                p.eta_seconds = int(est)
+                                p.eta_updated_at = __import__('datetime').datetime.utcnow()
+                                db.session.add(p)
+                                print(f'Pool {p.id}: ETA estimated -> {p.eta_seconds}s')
+            except Exception:
+                pass
+
         db.session.commit()
 
 

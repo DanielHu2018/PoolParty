@@ -10,6 +10,8 @@ cur.execute("PRAGMA table_info('pool')")
 cols = [r[1] for r in cur.fetchall()]
 print('Existing columns:', cols)
 needed = {'origin_lat': 'FLOAT', 'origin_lng': 'FLOAT', 'dest_lat': 'FLOAT', 'dest_lng': 'FLOAT'}
+# add ETA columns
+needed.update({'eta_seconds': 'INTEGER', 'eta_updated_at': 'DATETIME'})
 added = []
 for col, typ in needed.items():
     if col not in cols:

@@ -67,7 +67,7 @@ main { padding: 18px 0; }
 .page-title h2 { margin:0; color: var(--ocean-800); }
 
 .listings-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:18px; }
-.card { background: white; border-radius: 10px; box-shadow: 0 6px 18px rgba(18,36,56,0.08); overflow: hidden; display:flex; flex-direction:column; transition: transform .14s ease, box-shadow .14s ease; }
+.card { position: relative; background: white; border-radius: 10px; box-shadow: 0 6px 18px rgba(18,36,56,0.08); overflow: hidden; display:flex; flex-direction:column; transition: transform .14s ease, box-shadow .14s ease; }
 .card:hover { transform: translateY(-6px); box-shadow: 0 12px 28px rgba(18,36,56,0.12); }
 .card-body { padding: 14px 16px; flex:1; display:flex; flex-direction:column; }
 .card-title { font-size:1.05rem; font-weight:700; color:var(--ocean-600); margin-bottom:6px; }
@@ -76,11 +76,21 @@ main { padding: 18px 0; }
 .pill { background: var(--sand-300); color: var(--text); padding:6px 10px; border-radius:999px; font-weight:600; font-size:0.85rem; }
 .card-desc { color:#3b4750; font-size:0.95rem; margin-top:6px; margin-bottom:12px; overflow: hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; line-clamp:3; }
 .card-footer { padding: 12px 16px; border-top: 1px solid #f1efe9; display:flex; justify-content:space-between; align-items:center; }
-.btn { background: var(--ocean-600); color:white; padding:8px 12px; border-radius:6px; text-decoration:none; font-weight:700; }
+.btn { display: inline-block; background: var(--ocean-600); color:white; padding:8px 12px; border-radius:6px; text-decoration:none; font-weight:700; white-space:nowrap; }
 .btn.secondary { background: transparent; color:var(--ocean-600); border: 1px solid var(--ocean-300); }
 
+/* More-options (three dot) menu used on manage page */
+.more-btn { background: transparent; border: none; font-size:20px; line-height:1; padding:6px 8px; cursor:pointer; color:var(--muted); position:absolute; top:10px; right:10px; }
+.more-menu { position:absolute; right:10px; top:40px; background:white; border:1px solid #eee; box-shadow:0 6px 18px rgba(12,32,48,0.08); border-radius:6px; min-width:160px; display:none; z-index:120; }
+.more-menu.show { display:block; }
+.more-action { display:block; padding:8px 10px; color:var(--ocean-600); text-decoration:none; font-weight:600; }
+.more-action:hover { background:#f6f6f6; }
+/* style for a cancel button inside the more menu to match the anchor style */
+.more-action-btn { display:block; width:100%; text-align:left; padding:8px 10px; color:var(--ocean-600); background:none; border:none; font-weight:600; cursor:pointer; }
+.more-action-btn:hover { background:#f6f6f6; }
+
 .flashes { list-style: none; padding: 0; margin-bottom: 12px; }
-.flashes li { margin: 6px 0; padding: 8px 12px; border-radius: 6px; }
+.flashes li { margin: 6px 0; padding: 8px 16px; border-radius: 6px; }
 .flash-success { background: #e6ffef; color: #046; }
 .flash-danger { background: #ffecec; color: #7a1a1a; }
 .flash-warning { background: #fff6e0; color: #6b4b00; }
@@ -112,6 +122,22 @@ textarea { min-height:90px; resize:vertical; }
 .search-btn { padding:8px 12px; border-radius:8px; background:var(--coral); color:white; font-weight:700; border:none; }
 
 .centered { text-align:center; }
+
+/* Rider list inside manage cards — normalize spacing and align Remove button */
+.rider-list { list-style:none; padding:0; margin:8px 0 0 0; }
+/* Unified list grid for riders and requests: left action, main content, right action.
+	Columns: 80px (left action) | 1fr (content) | 140px (right action)
+	This ensures alignment even when one side is empty. */
+.list-item-grid { display:grid; grid-template-columns: 80px 1fr 140px; gap:12px; align-items:center; padding:6px 0; }
+.rider-list li { padding:0; }
+.rider-list li > .rider-action { grid-column:1; }
+.rider-list li > .rider-name { grid-column:2; min-width:0; }
+.rider-list li > .rider-right { grid-column:3; }
+.rider-list li.muted { padding:6px 0; }
+
+/* Top row inside card that holds title and route/address info and spans full width */
+.card-top-row { display:block; width:100%; margin-bottom:8px; }
+.card-top-row .card-route { margin-top:4px; color:var(--muted); font-weight:600; }
 
 /* Global typography and lists */
 h2 { color: var(--ocean-600); margin-top:0; }
