@@ -313,14 +313,14 @@ def google_maps_directions_url(origin=None, destination=None, origin_lat=None, o
         return quote_plus(str(v))
 
     if origin:
-        params.append(f"origin={_quote(origin)}")
+        params.append("origin=" + _quote(origin))
     elif origin_lat is not None and origin_lng is not None:
-        params.append(f"origin={_quote(str(origin_lat)+","+str(origin_lng))}")
+        params.append("origin=" + _quote(str(origin_lat) + "," + str(origin_lng)))
 
     if destination:
-        params.append(f"destination={_quote(destination)}")
+        params.append("destination=" + _quote(destination))
     elif dest_lat is not None and dest_lng is not None:
-        params.append(f"destination={_quote(str(dest_lat)+","+str(dest_lng))}")
+        params.append("destination=" + _quote(str(dest_lat) + "," + str(dest_lng)))
 
     # default to driving directions
     params.append("travelmode=driving")
