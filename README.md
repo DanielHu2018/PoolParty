@@ -1,5 +1,5 @@
 # PoolParty
-# PoolParty — Carpooling MVP for HackOHI/O 2025
+# Carpooling MVP for HackOHI/O 2025
 
 Visible at http://3.19.82.8/
 
