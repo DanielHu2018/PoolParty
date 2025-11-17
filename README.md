@@ -1,5 +1,7 @@
 # PoolParty
-# PoolParty — Carpooling MVP
+# PoolParty — Carpooling MVP for HackOHI/O 2025
+
+Visible at http://3.19.82.8/
 
 This repository contains a minimal Flask-based carpooling web app (MVP).
 
